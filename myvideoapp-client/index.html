@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Video Streaming App</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+        <script src="https://ajax.googleapis.com/ajax/libs/shaka-player/3.1.1/shaka-player.compiled.js"></script>
+    </head>
+    <body>
+        <div>
+            <input class="upload-file" type="file" name="fileToUpload" id="file-to-upload" />
+            <input class="video-title" type="text" placeholder="Title" />
+            <button id="upload-btn">Upload</button>
+            <video id="video"
+           width="640"
+           controls autoplay></video>
+        </div>
+    </body>
+    <script>
+        async function getVideos() {
+            try {
+                fetch("http://127.0.0.1:3000/m/getvideos")
+                .then(response => response.json())
+                .then(data => {
+                    let container = document.createElement("div");
+                    let videos = "";
+                    for (let i = 0; i < data.length; i++) {
+                        videos += `<div video=${data[i]} onClick="loadVideo('${data[i]}')">${data[i]}</div>`;
+                    }
+                    container.innerHTML = videos;
+                    document.body.children[0].insertBefore(container, document.getElementById('upload-btn'));
+                })
+                .catch((err) => {
+                    return false;
+                });
+            } catch (err) {
+                return false;
+            }
+        }
+        getVideos();
+        function loadVideo(video) {
+            location.href = location.origin + location.pathname + '?video=' + video;
+        }
+        async function doUpload(e) {
+            try {
+                e.preventDefault();
+                let file = document.getElementById("file-to-upload").files[0]; // Only allow upload of first file for now
+                let title = document.getElementsByClassName("video-title")[0].value;
+                if (file && title) {
+                    let data = new FormData();
+                    data.append("video", file);
+                    data.append("title", title);
+                    let loaded;
+                    let total;
+                    let uploadPercentage;
+                    const options = {
+                        onUploadProgress: progressEvent => { 
+                            loaded = progressEvent.loaded / 1000000;
+                            total = file.size / 1000000;
+                            uploadPercentage = (loaded/total) * 100;
+                            console.log(uploadPercentage);
+                        },
+                        headers: {
+                            'Content-Type': 'multipart/form-data'
+                        },
+                        withCredentials: false,
+                        timeout: 1000000
+                    }
+                    axios.post('http://127.0.0.1:3000/m/upload', data, options)
+                        .then(async (response) => {
+                            console.log(response);
+                        })
+                        .catch((err) => {
+                            err => console.log(err);
+                        })
+                }
+            } catch (err) {
+                return false;
+            }
+        }
+        let uplBtn = document.getElementById("upload-btn");
+        uplBtn.addEventListener("click", (doUpload));
+        /* Check support and append url video */
+        async function getVideoParam() {
+            var url = new URL(window.location.href);
+            var c = url.searchParams.get("video");
+            let m = "https://shakatestbucket1.s3.us-east-2.amazonaws.com/" + c;
+            const support = await shaka.Player.probeSupport();
+            if (support.manifest.mpd) {
+                m += "-mpd.mpd";
+            } else {
+                m += "-hls.m3u8";
+            }
+            return m;
+        }
+        const manifestUri = getVideoParam();
+
+        function initApp() {
+            // Install built-in polyfills to patch browser incompatibilities.
+            shaka.polyfill.installAll();
+
+            // Check to see if the browser supports the basic APIs Shaka needs.
+            if (shaka.Player.isBrowserSupported()) {
+                // Everything looks good!
+                initPlayer();
+            } else {
+                // This browser does not have the minimum set of APIs we need.
+                console.error('Browser not supported!');
+            }
+        }
+
+        async function initPlayer() {
+            // Create a Player instance.
+            const video = document.getElementById('video');
+            const player = new shaka.Player(video);
+
+            // Attach player to the window to make it easy to access in the JS console.
+            window.player = player;
+
+            // Listen for error events.
+            player.addEventListener('error', onErrorEvent);
+
+            // Try to load a manifest.
+            // This is an asynchronous process.
+            try {
+                await player.load(await manifestUri);
+                // This runs if the asynchronous load is successful.
+                console.log('The video has now been loaded!');
+            } catch (e) {
+                // onError is executed if the asynchronous load fails.
+                onError(e);
+            }
+        }
+
+        function onErrorEvent(event) {
+            // Extract the shaka.util.Error object from the event.
+            onError(event.detail);
+        }
+
+        function onError(error) {
+            // Log the error.
+            console.error('Error code', error.code, 'object', error);
+        }
+
+        document.addEventListener('DOMContentLoaded', initApp);
+    </script>
+</html>
