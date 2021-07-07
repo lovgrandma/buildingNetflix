@@ -1,6 +1,7 @@
 /myvideoapp-server/temp
 /myvideoapp-server/node_modules
 /myvideoapp-server/package-lock.json
+/myvideoapp-server/logs.txt
 
 # Logs
 logs
